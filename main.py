@@ -50,15 +50,14 @@ def fp_tree_build(dataset, iceberg_condition):
         item_table = {}
         for entry in dataset:  # First search, get accumulated supports
             for item in entry:
-                item_table[item] = item_table.get(item, 0) + dataset[entry]
-                # item_table = {item: support}
+                item_table[item] = item_table.get(item, 0) + dataset[entry]  # item_table = {item: support}
+
         for c in list(item_table):  # Delete entries not satisfied with iceberg condition
             if item_table[c] < ib_cd:
                 del item_table[c]
         freq_item_set = set(item_table.keys())  # Save frequent items
         for k in item_table:  # Save count and pointer
-            item_table[k] = [item_table[k], None]
-            # item_table = {item: [support, None]}
+            item_table[k] = [item_table[k], None]  # item_table = {item: [support, None]}
         # print(freq_item_set, item_table)
         ret_tree = TreeNode('null', 1, None)
         for entry, count in dataset.items():
@@ -94,11 +93,38 @@ def fp_tree_build(dataset, iceberg_condition):
             data_dic[frozenset(entry)] = 0
         for entry in dataset:
             data_dic[frozenset(entry)] += 1
-        # print(data_dic)
-        # for entry in data_dic:
-        #     if entry in np.array(dataset) - np.array(set(dataset)):
-        #         data_dic[frozenset(entry)] += 1
         return data_dic
+
+    def ascend_tree(leaf_node, prefix_path):
+        if leaf_node.parent is not None:
+            prefix_path.append(leaf_node.name)
+            ascend_tree(leaf_node.parent, prefix_path)
+        return None
+
+    def find_prefix_path(base_pat, tree_node):
+        cond_pat = {}
+        while tree_node is not None:
+            prefix_path = []
+            ascend_tree(tree_node, prefix_path)
+            if len(prefix_path) > 1:
+                cond_pat[frozenset(prefix_path[1:])] = tree_node.count
+            tree_node = tree_node.node_link
+        return cond_pat
+
+    def mine_tree(in_tree, item_table, ib_cd, prefix, freq_list):
+        re_ordered_items = [v[0] for v in sorted(item_table.items(), key=lambda p: p[1][0])]
+        for base_pat in re_ordered_items:
+            new_freq_set = prefix.copy()
+            new_freq_set.add(base_pat)
+            freq_list.append(new_freq_set)
+            cond_pat_bases = find_prefix_path(base_pat, item_table[base_pat][1])
+
+            cond_tree, new_item_table = create_tree(cond_pat_bases, ib_cd)
+
+            if new_item_table is not None:
+                print('conditional tree for: ', new_freq_set)
+                cond_tree.display(1)
+                mine_tree(cond_tree, new_item_table, ib_cd, new_freq_set, freq_list)
 
     df = pd.read_csv(
         '//Users/keweiwang/Google_Drive/Stony_Brook_University/Courses/589_Learning_Systems/Project1/Cryotherapy.csv',
